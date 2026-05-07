@@ -1,0 +1,191 @@
+import groovy.json.JsonOutput
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    parameters {
+        booleanParam(
+            name: 'SECURITY_STRICT_MODE',
+            defaultValue: false,
+            description: 'true = les stages SCA/SAST/Secrets bloquent la pipeline ; false = audit documenté puis progression vers Render'
+        )
+        string(
+            name: 'RENDER_APP_URL',
+            defaultValue: '',
+            description: 'URL publique Render, exemple : https://quicknotes.onrender.com'
+        )
+    }
+
+    environment {
+        STUDENT_FULL_NAME = 'Dylan Richardon'
+        DISCORD_WEBHOOK = credentials('discord-webhook')
+        RENDER_DEPLOY_HOOK = credentials('render-deploy-hook')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                cleanWs()
+                checkout scm
+                sh 'git rev-parse --short HEAD || true'
+            }
+        }
+
+        stage('Install') {
+            agent { docker { image 'node:20-alpine'; args '-u root'; reuseNode false } }
+            steps {
+                deleteDir()
+                checkout scm
+                sh 'npm ci --ignore-scripts'
+            }
+        }
+
+        stage('Lint') {
+            agent { docker { image 'node:20-alpine'; args '-u root'; reuseNode false } }
+            steps {
+                deleteDir()
+                checkout scm
+                sh 'npm ci --ignore-scripts'
+                sh 'npm run lint'
+            }
+        }
+
+        stage('Tests') {
+            agent { docker { image 'node:20-alpine'; args '-u root'; reuseNode false } }
+            steps {
+                deleteDir()
+                checkout scm
+                sh 'npm ci --ignore-scripts'
+                sh 'npm test'
+            }
+        }
+
+        stage('Coverage') {
+            agent { docker { image 'node:20-alpine'; args '-u root'; reuseNode false } }
+            steps {
+                deleteDir()
+                checkout scm
+                sh 'npm ci --ignore-scripts'
+                sh '''
+                    npx jest --coverage \
+                      --coverageThreshold='{"global":{"lines":70,"statements":70,"functions":50,"branches":15}}'
+                '''
+            }
+        }
+
+        stage('SCA - npm audit') {
+            agent { docker { image 'node:20-alpine'; args '-u root'; reuseNode false } }
+            steps {
+                deleteDir()
+                checkout scm
+                sh 'npm ci --ignore-scripts'
+                script {
+                    int status = sh(script: 'npm audit --audit-level=moderate', returnStatus: true)
+                    if (status != 0 && params.SECURITY_STRICT_MODE) {
+                        error('SCA en échec : vulnérabilités détectées par npm audit.')
+                    }
+                    if (status != 0) {
+                        unstable('SCA : vulnérabilités détectées, pipeline laissée poursuivre car SECURITY_STRICT_MODE=false.')
+                    }
+                }
+            }
+        }
+
+        stage('SAST - Semgrep') {
+            agent { docker { image 'semgrep/semgrep:latest'; args '--entrypoint="" -u root'; reuseNode false } }
+            steps {
+                deleteDir()
+                checkout scm
+                script {
+                    int status = sh(
+                        script: '''
+                            semgrep scan \
+                              --config .semgrep/quicknotes.yml \
+                              --config p/javascript \
+                              --config p/nodejs \
+                              --config p/owasp-top-ten \
+                              --error
+                        ''',
+                        returnStatus: true
+                    )
+                    if (status != 0 && params.SECURITY_STRICT_MODE) {
+                        error('SAST en échec : vulnérabilités détectées par Semgrep.')
+                    }
+                    if (status != 0) {
+                        unstable('SAST : vulnérabilités détectées, pipeline laissée poursuivre car SECURITY_STRICT_MODE=false.')
+                    }
+                }
+            }
+        }
+
+        stage('Secrets - Gitleaks') {
+            agent { docker { image 'ghcr.io/gitleaks/gitleaks:latest'; args '--entrypoint="" -u root'; reuseNode false } }
+            steps {
+                deleteDir()
+                checkout scm
+                script {
+                    int status = sh(script: 'gitleaks detect --source . --redact --verbose --exit-code 1', returnStatus: true)
+                    if (status != 0 && params.SECURITY_STRICT_MODE) {
+                        error('Secrets en échec : secret potentiel détecté par Gitleaks.')
+                    }
+                    if (status != 0) {
+                        unstable('Secrets : secret potentiel détecté, pipeline laissée poursuivre car SECURITY_STRICT_MODE=false.')
+                    }
+                }
+            }
+        }
+
+        stage('Validation manuelle') {
+            steps {
+                input message: 'Valider le déploiement QuickNotes sur Render ?', ok: 'Déployer'
+            }
+        }
+
+        stage('Deploy - Render') {
+            steps {
+                sh 'curl -fsS -X POST "$RENDER_DEPLOY_HOOK"'
+            }
+        }
+
+        stage('Healthcheck Render') {
+            when { expression { return params.RENDER_APP_URL?.trim() } }
+            steps {
+                sh '''
+                    set -eu
+                    APP_URL="${RENDER_APP_URL%/}"
+                    echo "Vérification de ${APP_URL}/health"
+                    for i in $(seq 1 30); do
+                        if curl -fsS "${APP_URL}/health"; then
+                            echo "Healthcheck OK"
+                            exit 0
+                        fi
+                        echo "Application non prête, tentative ${i}/30"
+                        sleep 10
+                    done
+                    echo "Healthcheck KO"
+                    exit 1
+                '''
+            }
+        }
+    }
+
+    post {
+        success { script { notifyDiscord('SUCCESS', '✅') } }
+        unstable { script { notifyDiscord('UNSTABLE', '⚠️') } }
+        failure { script { notifyDiscord('FAILED', '❌') } }
+        always { cleanWs(deleteDirs: true, disableDeferredWipeout: true) }
+    }
+}
+
+void notifyDiscord(String status, String icon) {
+    String content = "${icon} Pipeline ${status} - Dylan Richardon - Job: ${env.JOB_NAME} - Build: #${env.BUILD_NUMBER} - URL: ${env.BUILD_URL}"
+    writeFile file: 'discord-payload.json', text: JsonOutput.toJson([content: content])
+    sh 'curl -fsS -H "Content-Type: application/json" -X POST --data @discord-payload.json "$DISCORD_WEBHOOK"'
+}
