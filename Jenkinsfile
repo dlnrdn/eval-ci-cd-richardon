@@ -159,21 +159,21 @@ pipeline {
     success {
       script {
         node {
-          notifyDiscord('SUCCESS DYLAN GG BG', "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} a réussi : ${env.BUILD_URL}")
+          notifyDiscord('SUCCESS', "✅ Dylan Richardon - Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Statut: SUCCESS | URL: ${env.BUILD_URL}")
         }
       }
     }
     unstable {
       script {
         node {
-          notifyDiscord('UNSTABLE', "⚠️ ${env.JOB_NAME} #${env.BUILD_NUMBER} instable : ${env.BUILD_URL}")
+          notifyDiscord('UNSTABLE', "⚠️ Dylan Richardon - Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Statut: UNSTABLE | URL: ${env.BUILD_URL}")
         }
       }
     }
     failure {
       script {
         node {
-          notifyDiscord('FAILURE', "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} a échoué : ${env.BUILD_URL}")
+          notifyDiscord('FAILURE', "❌ Dylan Richardon - Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Statut: FAILURE | URL: ${env.BUILD_URL}")
         }
       }
     }
