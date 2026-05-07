@@ -22,7 +22,7 @@ pipeline {
       agent {
         docker {
           image 'node:20-alpine'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -33,7 +33,7 @@ pipeline {
       agent {
         docker {
           image 'node:20-alpine'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -44,7 +44,7 @@ pipeline {
       agent {
         docker {
           image 'node:20-alpine'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -55,7 +55,7 @@ pipeline {
       agent {
         docker {
           image 'node:20-alpine'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -66,7 +66,7 @@ pipeline {
       agent {
         docker {
           image 'node:20-alpine'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -85,7 +85,7 @@ pipeline {
       agent {
         docker {
           image 'returntocorp/semgrep:latest'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -104,7 +104,7 @@ pipeline {
       agent {
         docker {
           image 'ghcr.io/gitleaks/gitleaks:latest'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -129,7 +129,7 @@ pipeline {
       agent {
         docker {
           image 'node:20-alpine'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -145,7 +145,7 @@ pipeline {
       agent {
         docker {
           image 'node:20-alpine'
-          args '-u root:root'
+          args '-u 1000:1000'
         }
       }
       steps {
@@ -173,7 +173,7 @@ pipeline {
     failure {
       script {
         node {
-          notifyDiscord('FAILURE', "❌ Dylan Richardon - Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Statut: FAILURE | URL: ${env.BUILD_URL}")
+          notifyDiscord('ECHEC', "😭 Dylan Richardon - Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Statut: FAILURE | URL: ${env.BUILD_URL}")
         }
       }
     }
