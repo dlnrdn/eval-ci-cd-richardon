@@ -8,8 +8,6 @@ pipeline {
     booleanParam(name: 'SECURITY_STRICT_MODE', defaultValue: true, description: 'Si activé, les étapes de sécurité bloquent la pipeline en cas de détection.')
   }
   environment {
-    DISCORD_WEBHOOK = credentials('discord-webhook')
-    RENDER_DEPLOY_HOOK = credentials('render-deploy-hook')
     RENDER_APP_URL = ''
   }
   stages {
@@ -135,8 +133,12 @@ pipeline {
         }
       }
       steps {
-        sh 'apk add --no-cache curl'
-        sh 'curl -s -X POST -H "Content-Type: application/json" -d "{}" "$RENDER_DEPLOY_HOOK"'
+        script {
+          withCredentials([string(credentialsId: 'render-deploy-hook', variable: 'RENDER_DEPLOY_HOOK')]) {
+            sh 'apk add --no-cache curl'
+            sh 'curl -s -X POST -H "Content-Type: application/json" -d "{}" "$RENDER_DEPLOY_HOOK"'
+          }
+        }
       }
     }
     stage('Healthcheck') {
@@ -156,22 +158,30 @@ pipeline {
   post {
     success {
       script {
-        notifyDiscord('SUCCESS', "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} a réussi : ${env.BUILD_URL}")
+        node {
+          notifyDiscord('SUCCESS DYLAN GG BG', "✅ ${env.JOB_NAME} #${env.BUILD_NUMBER} a réussi : ${env.BUILD_URL}")
+        }
       }
     }
     unstable {
       script {
-        notifyDiscord('UNSTABLE', "⚠️ ${env.JOB_NAME} #${env.BUILD_NUMBER} instable : ${env.BUILD_URL}")
+        node {
+          notifyDiscord('UNSTABLE', "⚠️ ${env.JOB_NAME} #${env.BUILD_NUMBER} instable : ${env.BUILD_URL}")
+        }
       }
     }
     failure {
       script {
-        notifyDiscord('FAILURE', "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} a échoué : ${env.BUILD_URL}")
+        node {
+          notifyDiscord('FAILURE', "❌ ${env.JOB_NAME} #${env.BUILD_NUMBER} a échoué : ${env.BUILD_URL}")
+        }
       }
     }
   }
 }
 
 def notifyDiscord(String status, String message) {
-  sh "curl -s -X POST -H 'Content-Type: application/json' -d '{\"content\": \"${message}\"}' '${DISCORD_WEBHOOK}'"
+  withCredentials([string(credentialsId: 'discord-webhook', variable: 'DISCORD_WEBHOOK')]) {
+    sh "curl -s -X POST -H 'Content-Type: application/json' -d '{\"content\": \"${message}\"}' \"${DISCORD_WEBHOOK}\""
+  }
 }
