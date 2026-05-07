@@ -173,7 +173,7 @@ pipeline {
     failure {
       script {
         node {
-          notifyDiscord('ECHEC', "😭 Dylan Richardon - Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Statut: FAILURE | URL: ${env.BUILD_URL}")
+          notifyDiscord('FAILURE', "😭 Dylan Richardon - Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER} | Statut: ECHEC | URL: ${env.BUILD_URL}")
         }
       }
     }
