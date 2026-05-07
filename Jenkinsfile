@@ -59,7 +59,7 @@ pipeline {
         }
       }
       steps {
-        sh 'npm run test:coverage -- --coverageThreshold={"global":{"lines":70,"statements":70,"functions":50,"branches":15}}'
+        sh "npm run test:coverage -- --coverageThreshold='{\"global\":{\"lines\":70,\"statements\":70,\"functions\":50,\"branches\":15}}'"
       }
     }
     stage('SCA') {
